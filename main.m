@@ -80,10 +80,10 @@ plot(time, improvedQuants, 'g'); axis tight; grid on;
 title(sprintf('Improved Quantized Amplitude Over Time. Distortion: %.5f', ms_distortion)); 
 xlabel('Seconds'); ylabel('Quantized Amplitude');
 
-% Perform uniform scalar quantization (on each channel separately) using an extra bit. Where decision levels DO consider 
+% Perform uniform scalar quantization (on each channel separately) using extra bits. Where decision levels DO consider 
 % maximum value of the sequence.
 %   Amplitude falls in range [-1, 1].
-%   16 reconstruction levels. 2^4 = 16, so 4 bits in coding.
+%   16 reconstruction levels. 2^8 = 256, so 8 bits in coding.
 %   Delta:
 %      determined by minmaxsteps
 %   Decision levels: 
@@ -92,15 +92,15 @@ xlabel('Seconds'); ylabel('Quantized Amplitude');
 %      determined by minmaxsteps
 %
 % Generate decisions and reconstructions.
-reconstructionLevels = 16;
+reconstructionLevels = 256;
 x_min = min(audioData(:, 1));
 x_max = max(audioData(:, 1));
 [decisions, reconstructions] = minmaxsteps(reconstructionLevels, x_min, x_max);
 
-[indexes4Bits1, quantsChannelOne, msDistortion1] = quantiz(audioData(:, 1), decisions, reconstructions);
-[indexes4Bits2, quantsChannelTwo, msDistortion2] = quantiz(audioData(:, 2), decisions, reconstructions);
-indexes4Bits = uint8([indexes4Bits1(:), indexes4Bits2(:)]);
-codebook4Bits = reconstructions;
+[indexes8Bits1, quantsChannelOne, msDistortion1] = quantiz(audioData(:, 1), decisions, reconstructions);
+[indexes8Bits2, quantsChannelTwo, msDistortion2] = quantiz(audioData(:, 2), decisions, reconstructions);
+indexes8Bits = uint8([indexes8Bits1(:), indexes8Bits2(:)]);
+codebook8Bits = reconstructions;
 improvedQuantsExtended = [quantsChannelOne(:), quantsChannelTwo(:)];
 ms_distortion = (msDistortion1 + msDistortion2) / 2;
 
@@ -143,7 +143,7 @@ xlabel('Seconds'); ylabel('Quantized Amplitude');
 
 % Perform non-uniform scalar quantization (on each channel separately). An extra bit is used in coding.
 %   Amplitude falls in range [-1, 1].
-%   8 reconstruction levels. 2^4 = 16, so 4 bits in coding.
+%   8 reconstruction levels. 2^8 = 256, so 8 bits in coding.
 %   Delta:
 %      determined by quantiles
 %   Decision levels: 
@@ -152,7 +152,7 @@ xlabel('Seconds'); ylabel('Quantized Amplitude');
 %      determined by quantiles
 %
 % Generate decisions and reconstructions.
-reconstructionLevels = 16;
+reconstructionLevels = 256;
 decisions = quantile(audioData(:, 1), reconstructionLevels - 1);
 reconstructions = [(-1.0 - decisions(1)) / 2];
 for index = 2 : reconstructionLevels - 1
@@ -172,8 +172,8 @@ plot(time, nonUniformQuantsExtended, 'k'); axis tight; grid on;
 title(sprintf('Extended Non-Uniform Quantized Amplitude Over Time. Distortion: %.5f', ms_distortion));
 xlabel('Seconds'); ylabel('Quantized Amplitude');
 
-% For comparison's sake, use the Lloyd Algorithm [lloyd()] to optimize the quantization parameters.
-% Reminder: reconstructionLevels = same as above, 16.
+% For comparison's sake, use the Lloyd Algorithm [lloyd()] to optimize the quantization parameters with 3-bits.
+reconstructionLevels = 8;
 [decisions, reconstructions] = lloyds(audioData(:, 1), reconstructionLevels);
 [~, lloydsQuantsOne, msDistortion1] = quantiz(audioData(:, 1), decisions, reconstructions);
 [~, lloydsQuantsTwo, msDistortion2] = quantiz(audioData(:, 1), decisions, reconstructions);
@@ -186,15 +186,15 @@ plot(time, lloydsQuants, 'c'); axis tight; grid on;
 title(sprintf('Lloyd''s Quantized Amplitude Over Time. Distortion: %.5f', ms_distortion));
 xlabel('Seconds'); ylabel('Quantized Amplitude');
 
-% Plot the original audio against the 3-bit and 4-bit uniform quantizer waveforms.
+% Plot the original audio against the 3-bit and 8-bit uniform quantized waveforms.
 figure(2);
 fifteenSeconds = 15 * sampleRate;
 plot(time(1:fifteenSeconds), audioData(1:fifteenSeconds), 'r', ...
      time(1:fifteenSeconds), improvedQuants(1:fifteenSeconds), 'c', ...
      time(1:fifteenSeconds), improvedQuantsExtended(1:fifteenSeconds), 'b'); 
 axis tight; grid on;
-title(sprintf('Original Audo Compared to 3-Bit and 4-Bit Quantizers (15s)'));
-xlabel('Seconds'); ylabel('Amplitudes'); legend('Original Audio', '3-Bit Uniform Quantizer', '4-Bit Uniform Quantizer');
+title(sprintf('Original Audo Compared to 3-Bit and 8-bit Quantizers (15s)'));
+xlabel('Seconds'); ylabel('Amplitudes'); legend('Original Audio', '3-Bit Uniform Quantizer', '8-bit Uniform Quantizer');
 
 %%%  Audio play %%%
 
@@ -207,13 +207,13 @@ playsnippet(quants, sampleRate, 'uniform quantized audio');
 % Play the improved uniform quantized audio. 3-bits.
 playsnippet(improvedQuants, sampleRate, 'improved uniform quantized audio');
 
-% Play the improved and extended uniform quantized audio. 4-bits.
+% Play the improved and extended uniform quantized audio. 8-bits.
 playsnippet(improvedQuantsExtended, sampleRate, 'improved/extended uniform quantized audio');
 
 % Play the non-uniformquantized audio. 3-bits.
 playsnippet(nonUniformQuants, sampleRate, 'non-uniform quantized audio');
 
-% Play the non-uniformquantized audio. 4-bits.
+% Play the non-uniformquantized audio. 8-bits.
 playsnippet(nonUniformQuantsExtended, sampleRate, 'extended non-uniform quantized audio');
 
 % Play the lloyd optimized quantized audio.
@@ -250,32 +250,32 @@ end
 fprintf('Reconstructed 3-bit quants are identical to improvedQuants: %u\n', isequal(reconstructed3BitQuants, ...
                                                                                     improvedQuants));
 
-% Write 4-bit coding to disk.
-frameSize = size(indexes4Bits, 1);
-numChannels = size(indexes4Bits, 2);
+% Write 8-bit coding to disk.
+frameSize = size(indexes8Bits, 1);
+numChannels = size(indexes8Bits, 2);
 header = struct('DataType', 'uint8', 'Complexity', false, 'FrameSize', frameSize, 'NumChannels', numChannels);
 [~, fourBitCodedFileName, ~] = fileparts(originalFileName);
-fourBitCodedFileName = append(fourBitCodedFileName, '-4Bits.bin');
+fourBitCodedFileName = append(fourBitCodedFileName, '-8Bits.bin');
 writer = dsp.BinaryFileWriter(fourBitCodedFileName, 'HeaderStructure', header);
-writer(indexes4Bits);
+writer(indexes8Bits);
 release(writer);
 
-% Read the 4-bit coded file size.
+% Read the 8-bit coded file size.
 fourBitFileSize = dir(fourBitCodedFileName).bytes;
-fprintf('4-bit coded audio fileSize: %u bytes.\n', fourBitFileSize);
+fprintf('8-bit coded audio fileSize: %u bytes.\n', fourBitFileSize);
 
-% Write the 4-bit codebook to disk.
+% Write the 8-bit codebook to disk.
 [~, fourBitCodebookFileName, ~] = fileparts(originalFileName);
-fourBitCodebookFileName = append(fourBitCodebookFileName, '-4BitCodebook.txt');
+fourBitCodebookFileName = append(fourBitCodebookFileName, '-8bitCodebook.txt');
 fileId = fopen(fourBitCodebookFileName, 'w');
-fprintf(fileId, '%f\n', codebook4Bits);
+fprintf(fileId, '%f\n', codebook8Bits);
 fclose(fileId);
 
-% Convert indexes back into quants and check if the reconstructed quants are identical to the original 4-bit quants.
-reconstructed4BitQuants = double(indexes4Bits);
-for index = 1 : length(codebook4Bits)
-    reconstructed4BitQuants(reconstructed4BitQuants == (index - 1)) = codebook4Bits(index);
+% Convert indexes back into quants and check if the reconstructed quants are identical to the original 8-bit quants.
+reconstructed8BitQuants = double(indexes8Bits);
+for index = 1 : length(codebook8Bits)
+    reconstructed8BitQuants(reconstructed8BitQuants == (index - 1)) = codebook8Bits(index);
 end
-fprintf('Reconstructed 4-bit quants are identical to improvedQuantsExtended: %u\n', isequal(reconstructed4BitQuants, ...
+fprintf('Reconstructed 8-bit quants are identical to improvedQuantsExtended: %u\n', isequal(reconstructed8BitQuants, ...
                                                                                             improvedQuantsExtended));
                                                                                 
